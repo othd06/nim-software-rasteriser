@@ -478,6 +478,8 @@ proc clipping() =
 const
     hWIDTH = WIDTH shr 1
     hHEIGHT = HEIGHT shr 1
+    hWIDTHf = hWIDTH.float
+    hHEIGHTf = hHEIGHT.float
 
 proc rasterisation() =
     while rasterisationQueue.len > 0:
@@ -512,20 +514,24 @@ proc rasterisation() =
                 y: newTri.positions[2].y
             )
             denom = ( (v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y) )
+            al1 = (v1.y - v2.y)
+            al2 = (v2.x - v1.x)
+            be1 = (v2.y - v0.y)
+            be2 = (v0.x - v2.x)
         if denom == 0: continue
         
         for y in screenBottom..screenTop:
             for x in screenLeft..screenRight:
                 #compute NDC position
                 let ndcPos: Vector2 = Vector2(
-                    x: (x.float / (hWIDTH).float) - 1,
-                    y: (y.float / (hHEIGHT).float) - 1
+                    x: (x.float / hWIDTHf) - 1,
+                    y: (y.float / hHEIGHTf) - 1
                 )
                 #compute barycentrics
                 let
-                    alpha = ( (v1.y - v2.y) * (ndcPos.x - v2.x) + (v2.x - v1.x) * (ndcPos.y - v2.y) ) / denom
-                    beta = ( (v2.y - v0.y) * (ndcPos.x - v2.x) + (v0.x - v2.x) * (ndcPos.y - v2.y) ) / denom
-                    gamma = 1 - alpha - beta
+                    alpha: float32 = ( al1 * (ndcPos.x - v2.x) + al2 * (ndcPos.y - v2.y) ) / denom
+                    beta: float32 = ( be1 * (ndcPos.x - v2.x) + be2 * (ndcPos.y - v2.y) ) / denom
+                    gamma: float32 = 1 - alpha - beta
                 #reject fragments outside triangle
                 if alpha < 0.0 or beta < 0.0 or gamma < 0.0:
                     continue
