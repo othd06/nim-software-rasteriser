@@ -3,20 +3,18 @@ import raymath
 import math
 import algorithm
 import times
-import std/locks
-import std/typedthreads
 
-func getXYZ(vec: Vector4): Vector3 =
+func getXYZ(vec: Vector4): Vector3 {.inline.} =
     return Vector3(x: vec.x, y: vec.y, z: vec.z)
 
-func addW(vec: Vector3, w: float): Vector4 =
+func addW(vec: Vector3, w: float): Vector4 {.inline.} =
     return Vector4(x: vec.x, y: vec.y, z: vec.z, w: w)
 
-func `*`[T](x: array[T, float32], y: float32): array[T, float32] =
+func `*`[T](x: array[T, float32], y: float32): array[T, float32] {.inline.} =
     for i in 0..<x.len:
         result[i] = x[i] * y
 
-func `+`[T](x: array[T, float32], y: array[T, float32]): array[T, float32] =
+func `+`[T](x: array[T, float32], y: array[T, float32]): array[T, float32] {.inline.} =
     for i in 0..<x.len:
         result[i] = x[i] + y[i]
 
@@ -60,20 +58,9 @@ var
     DEPTH: array[WIDTH*HEIGHT, float32]
     vertexShadingQueue: seq[tri]
     clippingQueue: seq[tri]
-    rasterisationQueue: seq[tri]
-    fragmentShadingQueue: array[2, seq[frag]]
-    fragmentShadingQueue0Len: int
-    fragmentShadingQueue1Len: int
-    fragmentShading0Addr: pointer
-    fragmentShading1Addr: pointer
+    rasterisationFragmentShadingQueue: seq[tri]
     colourData = newSeq[Color](WIDTH * HEIGHT)
     screenTex: Texture
-
-    lockA, lockB: Lock
-    condA, condB: Cond
-    jobReadyA, jobReadyB: bool
-    jobDoneA, jobDoneB: bool
-    tA, tB: Thread[pointer]
 
 type
     Cam = object
@@ -138,22 +125,10 @@ proc clearScreen(colour: uint32)=
         COLOUR[i] = colour
         DEPTH[i] = 1.0
 
-proc fragmentWorkerA(arg: pointer) {.thread.};
-proc fragmentWorkerB(arg: pointer) {.thread.};
-
 proc init() =
     #initialise the window
     initWindow(WIDTH, HEIGHT, "Software Rasteriser")
     setTargetFPS(40)
-
-    echo "creating threads"
-    initLock(lockA)
-    initLock(lockB)
-    initCond(condA)
-    initCond(condB)
-    createThread(tA, fragmentWorkerA, nil)
-    createThread(tB, fragmentWorkerB, nil)
-    echo "threads created"
 
     
     #initialise the screen texture
@@ -404,9 +379,9 @@ proc farClip(triangle: tri): bool =
     if clipNum == 3:
         return true
     if clipNum == 1:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
     if clipNum == 2:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
 
 proc leftClip(triangle: tri): bool =
     var clipNum: int = 0
@@ -418,9 +393,9 @@ proc leftClip(triangle: tri): bool =
     if clipNum == 3:
         return true
     if clipNum == 1:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
     if clipNum == 2:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
 
 proc rightClip(triangle: tri): bool =
     var clipNum: int = 0
@@ -432,9 +407,9 @@ proc rightClip(triangle: tri): bool =
     if clipNum == 3:
         return true
     if clipNum == 1:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
     if clipNum == 2:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
 
 proc topClip(triangle: tri): bool =
     var clipNum: int = 0
@@ -446,9 +421,9 @@ proc topClip(triangle: tri): bool =
     if clipNum == 3:
         return true
     if clipNum == 1:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
     if clipNum == 2:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
 
 proc bottomClip(triangle: tri): bool =
     var clipNum: int = 0
@@ -460,9 +435,9 @@ proc bottomClip(triangle: tri): bool =
     if clipNum == 3:
         return true
     if clipNum == 1:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
     if clipNum == 2:
-        return false #A bit hacky but should just work because of how the rasterisation stage works
+        return false #A bit hacky but should just work because of how the rasterisationFragmentShading stage works
 
 proc clipping() =
     while clippingQueue.len > 0:
@@ -473,7 +448,7 @@ proc clipping() =
         if rightClip(newTri): continue
         if topClip(newTri): continue
         if bottomClip(newTri): continue
-        rasterisationQueue.add(newTri)
+        rasterisationFragmentShadingQueue.add(newTri)
 
 const
     hWIDTH = WIDTH shr 1
@@ -481,9 +456,9 @@ const
     hWIDTHf = hWIDTH.float
     hHEIGHTf = hHEIGHT.float
 
-proc rasterisation() =
-    while rasterisationQueue.len > 0:
-        var newTri = rasterisationQueue.pop()
+proc rasterisationFragmentShading() =
+    while rasterisationFragmentShadingQueue.len > 0:
+        var newTri = rasterisationFragmentShadingQueue.pop()
         for i in 0..2:
             newTri.positions[i].x /= newTri.positions[i].w
             newTri.positions[i].y /= newTri.positions[i].w
@@ -565,91 +540,20 @@ proc rasterisation() =
                         intAttrs[i] = newTri.intAttribs[2][i]
                         uintAttrs[i] = newTri.uintAttribs[2][i]
                 #generate fragment
-                let newFrag = frag(
-                    fragmentShader: newTri.fragmentShader,
-                    screenX: x,
-                    screenY: y,
-                    floatAttribs: newFloatAttrs,
-                    intAttribs: intAttrs,
-                    uintAttribs: uintAttrs
-                )
+                let
+                    newFrag = frag(
+                        fragmentShader: newTri.fragmentShader,
+                        screenX: x,
+                        screenY: y,
+                        floatAttribs: newFloatAttrs,
+                        intAttribs: intAttrs,
+                        uintAttribs: uintAttrs
+                    )
+                    newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
+                COLOUR[y*WIDTH + x] = newPix.col
+                
                 #queue fragment
-                fragmentShadingQueue[y mod 2].add(newFrag)
-
-proc fragmentShading0() {.gcsafe.} =
-    let queue = cast[ptr UncheckedArray[frag]](fragmentShading0Addr)
-    var index = fragmentShadingQueue0Len
-    while index >= 0:
-        let
-            newFrag: frag = queue[][index]
-            newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
-        COLOUR[newFrag.screenY*WIDTH + newFrag.screenX] = newPix.col
-        index -= 1
-
-proc fragmentShading1() {.gcsafe.} =
-    let queue = cast[ptr UncheckedArray[frag]](fragmentShading1Addr)
-    var index = fragmentShadingQueue1Len
-    while index >= 0:
-        let
-            newFrag: frag = queue[][index]
-            newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
-        COLOUR[newFrag.screenY*WIDTH + newFrag.screenX] = newPix.col
-        index -= 1
-
-proc fragmentWorkerA(arg: pointer) {.thread.} =
-    while true:
-        lockA.acquire()
-        while not jobReadyA:
-            condA.wait(lockA)
-        jobReadyA = false
-        lockA.release()
-
-        fragmentShading0()
-
-        lockA.acquire()
-        jobDoneA = true
-        condA.signal()
-        lockA.release()
-
-proc fragmentWorkerB(arg: pointer) {.thread.} =
-    while true:
-        lockB.acquire()
-        while not jobReadyB:
-            condB.wait(lockB)
-        jobReadyB = false
-        lockB.release()
-
-        fragmentShading1()
-
-        lockB.acquire()
-        jobDoneB = true
-        condB.signal()
-        lockB.release()
-
-proc multithreadedFragShading() =
-    # Wake workers
-    lockA.acquire()
-    jobDoneA = false
-    jobReadyA = true
-    condA.signal()
-    lockA.release()
-
-    lockB.acquire()
-    jobDoneB = false
-    jobReadyB = true
-    condB.signal()
-    lockB.release()
-
-    # Wait for both
-    lockA.acquire()
-    while not jobDoneA:
-        condA.wait(lockA)
-    lockA.release()
-
-    lockB.acquire()
-    while not jobDoneB:
-        condB.wait(lockB)
-    lockB.release()
+                #fragmentShadingQueue[y mod 2].add(newFrag)
 
 proc updateScreen() =
     ## Convert uint32 RGBA → Image → Texture2D
@@ -689,24 +593,8 @@ proc update() =
     clipping()
     let clippingTime = (cpuTime()-startTime)*1000
     startTime = cpuTime()
-    rasterisation()
-    let rasterisationTime = (cpuTime()-startTime)*1000
-    startTime = cpuTime()
-    fragmentShadingQueue[0].reverse()
-    fragmentShadingQueue[1].reverse()
-    fragmentShadingQueue0Len = fragmentShadingQueue[0].high
-    fragmentShadingQueue1Len = fragmentShadingQueue[1].high
-    if fragmentShadingQueue[0].len() == 0 or fragmentShadingQueue[1].len() == 0:
-        discard
-    else:
-        fragmentShading0Addr = addr fragmentShadingQueue[0][0]
-        fragmentShading1Addr = addr fragmentShadingQueue[1][0]
-        multithreadedFragShading()
-        #fragmentShading0()
-        #fragmentShading1()
-    fragmentShadingQueue[0] = @[]
-    fragmentShadingQueue[1] = @[]
-    let fragmentShadingTime = (cpuTime()-startTime)*1000
+    rasterisationFragmentShading()
+    let rasterisationFragmentShadingTime = (cpuTime()-startTime)*1000
     startTime = cpuTime()
     updateScreen()
     let blitTime = (cpuTime()-startTime)*1000
@@ -715,8 +603,7 @@ proc update() =
         echo("Application Time: ", $applicationTime, " ms")
         echo("Vertex Shading Time: ", $vertexShadingTime, " ms")
         echo("Clipping Time: ", $clippingTime, " ms")
-        echo("Rasterisation Time: ", $rasterisationTime, " ms")
-        echo("Fragment Shading Time: ", $fragmentShadingTime, " ms")
+        echo("RasterisationFragmentShading Time: ", $rasterisationFragmentShadingTime, " ms")
         echo("Blit Time: ", $blitTime, " ms")
 
 init()
