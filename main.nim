@@ -494,7 +494,7 @@ proc rasterisationFragmentShading() =
             be1 = (v2.y - v0.y)
             be2 = (v0.x - v2.x)
         if denom == 0: continue
-        
+        {.push checks:off.}
         for y in screenBottom..screenTop:
             for x in screenLeft..screenRight:
                 #compute NDC position
@@ -551,9 +551,7 @@ proc rasterisationFragmentShading() =
                     )
                     newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
                 COLOUR[y*WIDTH + x] = newPix.col
-                
-                #queue fragment
-                #fragmentShadingQueue[y mod 2].add(newFrag)
+            {.pop.}
 
 proc updateScreen() =
     ## Convert uint32 RGBA → Image → Texture2D
