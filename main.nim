@@ -470,10 +470,6 @@ proc rasterisationFragmentShading() =
             screenRight: uint32 = min((topRight.x*(hWIDTH).float).int32 + (hWIDTH).int32, WIDTH-1).uint32
             screenTop: uint32 = min((topRight.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, HEIGHT-1).uint32
             screenBottom: uint32 = max((bottomLeft.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, 0).uint32
-        var
-            oldFloatAttrs: array[3, array[maxAttribs, float32]]
-        for i in 0..2:
-            oldFloatAttrs[i] = newTri.floatAttribs[i]*(1/newTri.positions[i].w)
         
         let
             v0 = Vector2(
@@ -525,11 +521,11 @@ proc rasterisationFragmentShading() =
                 DEPTH[y*WIDTH + x] = depth
                 #calculate attributes
                 var
-                    newFloatAttrs: array[maxAttribs, float32]
+                    floatAttrs: array[maxAttribs, float32]
                     intAttrs: array[maxAttribs, int32]
                     uintAttrs: array[maxAttribs, uint32]
                 for i in 0..<maxAttribs:
-                    newFloatAttrs[i] = newTri.floatAttribs[0][i]*w0 + newTri.floatAttribs[1][i]*w1 + newTri.floatAttribs[2][i]*w2
+                    floatAttrs[i] = newTri.floatAttribs[0][i]*w0 + newTri.floatAttribs[1][i]*w1 + newTri.floatAttribs[2][i]*w2
                     if w0 > w1 and w0 > w2:
                         intAttrs[i] = newTri.intAttribs[0][i]
                         uintAttrs[i] = newTri.uintAttribs[0][i]
@@ -545,13 +541,13 @@ proc rasterisationFragmentShading() =
                         fragmentShader: newTri.fragmentShader,
                         screenX: x,
                         screenY: y,
-                        floatAttribs: newFloatAttrs,
+                        floatAttribs: floatAttrs,
                         intAttribs: intAttrs,
                         uintAttribs: uintAttrs
                     )
                     newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
                 COLOUR[y*WIDTH + x] = newPix.col
-            {.pop.}
+        {.pop.}
 
 proc updateScreen() =
     ## Convert uint32 RGBA → Image → Texture2D
