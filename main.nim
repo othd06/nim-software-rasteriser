@@ -149,14 +149,18 @@ proc setVertexColour(triangle: var tri, col: Color, vert: int, r: int, g: int, b
     triangle.floatAttribs[vert][b] = col.b.float/255
 
 proc doButtons() =
+    func flattenY(vec: Vector4): Vector4=
+        result = Vector4(x: vec.x, y: 0, z: vec.z, w: vec.w)
+        result.x /= sqrt(result.x*result.x + result.z*result.z)
+        result.z /= sqrt(result.x*result.x + result.z*result.z)
     if isKeyDown(W):
-        camera.pos += camera.forward/20
+        camera.pos += camera.forward.flattenY()/20
     if isKeyDown(S):
-        camera.pos -= camera.forward/20
+        camera.pos -= camera.forward.flattenY()/20
     if isKeyDown(D):
-        camera.pos += camera.right/20
+        camera.pos += camera.right.flattenY()/20
     if isKeyDown(A):
-        camera.pos -= camera.right/20
+        camera.pos -= camera.right.flattenY()/20
     if isKeyDown(Space):
         camera.pos.y += 2/40
     if isKeyDown(LeftControl):
@@ -193,40 +197,113 @@ proc application() =
         tri1 = tri(
             vertexShader: 0,
             fragmentShader: 0,
-            positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)],
+            positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)]
         )
         tri2 = tri(
             vertexShader: 0,
             fragmentShader: 0,
-            positions: [Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)],
+            positions: [Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)]
         )
         tri3 = tri(
             vertexShader: 0,
             fragmentShader: 0,
-            positions: [Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: -1, y: -1, z: 11, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)],
+            positions: [Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: -1, y: -1, z: 11, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)]
         )
         tri4 = tri(
             vertexShader: 0,
             fragmentShader: 0,
-            positions: [Vector4(x: 1, y: 1, z: 11, w: 1), Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)],
+            positions: [Vector4(x: 1, y: 1, z: 11, w: 1), Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)]
         )
-    tri1.setVertexColour(Brown, 0, 0, 1, 2)
-    tri1.setVertexColour(Brown, 1, 0, 1, 2)
-    tri1.setVertexcolour(Brown, 2, 0, 1, 2)
-    tri2.setVertexColour(Brown, 0, 0, 1, 2)
-    tri2.setVertexColour(Brown, 1, 0, 1, 2)
-    tri2.setVertexcolour(Brown, 2, 0, 1, 2)
+        tri5 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: -1, y: -1, z: 11, w: 1), Vector4(x: -1, y: 1, z: 11, w: 1)]
+        )
+        tri6 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: -1, y: -1, z: 9, w: 1)]
+        )
+        tri7 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: 1, y: -1, z: 11, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1), Vector4(x: 1, y: 1, z: 11, w: 1)]
+        )
+        tri8 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: 1, y: 1, z: 9, w: 1), Vector4(x: 1, y: 1, z:11, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)]
+        )
+        tri9 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: -1, y: 1, z: 11, w: 1), Vector4(x: 1, y: 1, z: 11, w: 1)]
+        )
+        tri10 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: 1, z: 11, w: 1), Vector4(x: 1, y: 1, z: 9, w: 1)]
+        )
+        tri11 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: -1, z: 11, w: 1), Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)]
+        )
+        tri12 = tri(
+            vertexShader: 0,
+            fragmentShader: 0,
+            positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)]
+        )
+    tri1.setVertexColour(Green, 0, 0, 1, 2)
+    tri1.setVertexColour(Green, 1, 0, 1, 2)
+    tri1.setVertexcolour(Green, 2, 0, 1, 2)
+    tri2.setVertexColour(Green, 0, 0, 1, 2)
+    tri2.setVertexColour(Green, 1, 0, 1, 2)
+    tri2.setVertexcolour(Green, 2, 0, 1, 2)
     tri3.setVertexColour(Blue, 0, 0, 1, 2)
     tri3.setVertexColour(Blue, 1, 0, 1, 2)
     tri3.setVertexcolour(Blue, 2, 0, 1, 2)
     tri4.setVertexColour(Blue, 0, 0, 1, 2)
     tri4.setVertexColour(Blue, 1, 0, 1, 2)
     tri4.setVertexcolour(Blue, 2, 0, 1, 2)
+    tri5.setVertexColour(Orange, 0, 0, 1, 2)
+    tri5.setVertexColour(Orange, 1, 0, 1, 2)
+    tri5.setVertexcolour(Orange, 2, 0, 1, 2)
+    tri6.setVertexColour(Orange, 0, 0, 1, 2)
+    tri6.setVertexColour(Orange, 1, 0, 1, 2)
+    tri6.setVertexcolour(Orange, 2, 0, 1, 2)
+    tri7.setVertexColour(Red, 0, 0, 1, 2)
+    tri7.setVertexColour(Red, 1, 0, 1, 2)
+    tri7.setVertexcolour(Red, 2, 0, 1, 2)
+    tri8.setVertexColour(Red, 0, 0, 1, 2)
+    tri8.setVertexColour(Red, 1, 0, 1, 2)
+    tri8.setVertexcolour(Red, 2, 0, 1, 2)
+    tri9.setVertexColour(Yellow, 0, 0, 1, 2)
+    tri9.setVertexColour(Yellow, 1, 0, 1, 2)
+    tri9.setVertexcolour(Yellow, 2, 0, 1, 2)
+    tri10.setVertexColour(Yellow, 0, 0, 1, 2)
+    tri10.setVertexColour(Yellow, 1, 0, 1, 2)
+    tri10.setVertexcolour(Yellow, 2, 0, 1, 2)
+    tri11.setVertexColour(White, 0, 0, 1, 2)
+    tri11.setVertexColour(White, 1, 0, 1, 2)
+    tri11.setVertexcolour(White, 2, 0, 1, 2)
+    tri12.setVertexColour(White, 0, 0, 1, 2)
+    tri12.setVertexColour(White, 1, 0, 1, 2)
+    tri12.setVertexcolour(White, 2, 0, 1, 2)
+    
 
-    vertexShadingQueue.add(tri3)
-    vertexShadingQueue.add(tri4)
     vertexShadingQueue.add(tri1)
     vertexShadingQueue.add(tri2)
+    vertexShadingQueue.add(tri3)
+    vertexShadingQueue.add(tri4)
+    vertexShadingQueue.add(tri5)
+    vertexShadingQueue.add(tri6)
+    vertexShadingQueue.add(tri7)
+    vertexShadingQueue.add(tri8)
+    vertexShadingQueue.add(tri9)
+    vertexShadingQueue.add(tri10)
+    vertexShadingQueue.add(tri11)
+    vertexShadingQueue.add(tri12)
     
 
 proc vertexShading() =
