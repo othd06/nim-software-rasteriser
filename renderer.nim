@@ -1,8 +1,14 @@
-import raylib
-import raymath
+
+import libSRWWL
+export KeyboardKey, isKeyDown, isKeyUp, windowShouldClose
+import cols
+import vectors
 import math
 import algorithm
 import times
+
+var frameTime*: float
+var frameStart: float
 
 func getXYZ*(vec: Vector4): Vector3 {.inline.} =
     return Vector3(x: vec.x, y: vec.y, z: vec.z)
@@ -48,14 +54,15 @@ type
 
 var
     COLOUR: pointer#array[WIDTH*HEIGHT, uint32]
+    COLOURS: array[2, pointer]
+    currentCol: int = 0
     DEPTH: pointer#array[WIDTH*HEIGHT, float32]
     WIDTH: int32
     HEIGHT: int32
     vertexShadingQueue: seq[tri]
     clippingQueue: seq[tri]
     rasterisationFragmentShadingQueue: seq[tri]
-    colourData: seq[Color] #= newSeq[Color](WIDTH * HEIGHT)
-    screenTex: Texture
+    colourData: seq[Colour] #= newSeq[Colour](WIDTH * HEIGHT)
     
 
 #const
@@ -96,26 +103,21 @@ proc initRendering*(width: int32, height: int32) =
     hHEIGHT = HEIGHT shr 1
     hWIDTHf = hWIDTH.float
     hHEIGHTf = hHEIGHT.float
+    frameStart = epochTime()
 
-    #initialise the window
-    initWindow(WIDTH, HEIGHT, "Software Rasteriser")
-    setTargetFPS(40)
-
-    colourData = newSeq[Color](WIDTH * HEIGHT)
-    COLOUR = alloc(WIDTH * HEIGHT * sizeof(uint32))
+    #colourData = newSeq[Colour](WIDTH * HEIGHT)
+    for i in 0..<(WIDTH*HEIGHT):
+        colourData.add(Colour(r: 0, g: 0, b: 0, a: 255))
+    COLOURS[0] = alloc(WIDTH * HEIGHT * sizeof(uint32))
+    COLOURS[1] = alloc(WIDTH * HEIGHT * sizeof(uint32))
+    COLOUR = COLOURS[currentCol]
     DEPTH = alloc(WIDTH * HEIGHT * sizeof(float32))
 
-    
+    #initialise the window
+    createWindow(WIDTH, HEIGHT, "Software Rasteriser")
+
     #initialise the screen texture
-    let img = genImageColor(WIDTH, HEIGHT, Black)
-    #var img = Image(
-    #    data: cast[pointer](colourData[0].addr),
-    #    width: WIDTH,
-    #    height: HEIGHT,
-    #    mipmaps: 1,
-    #    format: UncompressedR8g8b8a8
-    #)
-    screenTex = loadTextureFromImage(img)
+    setBuffer(cast[ptr uint8](COLOUR))
 
     
 
@@ -437,15 +439,20 @@ proc rasterisationFragmentShading() =
         {.pop.}
 
 proc updateScreen() =
+    setBuffer(cast[ptr uint8](COLOURS[currentCol]))
+    currentCol = 1-currentCol
+    COLOUR = COLOURS[currentCol]
+    waitForFrame()
+    #[
     let
         colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
         depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
     ## Convert uint32 RGBA → Image → Texture2D
-    # Convert to seq[Color] for Raylib
+    # Convert to seq[Colour] for Raylib
     if isKeyDown(L):
         for i in 0..<WIDTH * HEIGHT:
             let px = depthBuffer[][i]
-            colourData[i] = Color(
+            colourData[i] = Colour(
                 r: uint8(min((px / 100).float*255, 255.0)),
                 g: uint8(min((px / 100).float*255, 255.0)),
                 b: uint8(min((px / 100).float*255, 255.0)),
@@ -454,7 +461,7 @@ proc updateScreen() =
     else:
         for i in 0 ..< WIDTH * HEIGHT:
             let px = colourBuffer[][i]
-            colourData[i] = Color(
+            colourData[i] = Colour(
                 r: uint8((px shr 24) and 0xFF),
                 g: uint8((px shr 16) and 0xFF),
                 b: uint8((px shr 8) and 0xFF),
@@ -463,25 +470,28 @@ proc updateScreen() =
     updateTexture(screenTex, colourData)
     
     drawTexture(screenTex, 0, 0, White)
+    ]#
 
 proc render*() =
-    beginDrawing()
-    clearBackground(RayWhite)
-    var startTime = cpuTime()
-    startTime = cpuTime()
+    #beginDrawing()
+    #clearBackground(RayWhite)
+    var startTime = epochTime()
+    startTime = epochTime()
     vertexShading()
-    let vertexShadingTime = (cpuTime()-startTime)*1000
-    startTime = cpuTime()
+    let vertexShadingTime = (epochTime()-startTime)*1000
+    startTime = epochTime()
     clipping()
-    let clippingTime = (cpuTime()-startTime)*1000
-    startTime = cpuTime()
+    let clippingTime = (epochTime()-startTime)*1000
+    startTime = epochTime()
     rasterisationFragmentShading()
-    let rasterisationFragmentShadingTime = (cpuTime()-startTime)*1000
-    startTime = cpuTime()
+    let rasterisationFragmentShadingTime = (epochTime()-startTime)*1000
+    startTime = epochTime()
     updateScreen()
-    let blitTime = (cpuTime()-startTime)*1000
-    endDrawing()
-    if isKeyPressed(L):
+    let blitTime = (epochTime()-startTime)*1000
+    #endDrawing()
+    frameTime = epochTime() - frameStart
+    frameStart = epochTime()
+    if isKeyDown(KEY_L):
         echo("Vertex Shading Time: ", $vertexShadingTime, " ms")
         echo("Clipping Time: ", $clippingTime, " ms")
         echo("RasterisationFragmentShading Time: ", $rasterisationFragmentShadingTime, " ms")
@@ -491,5 +501,5 @@ proc render*() =
 proc deInit*() =
     dealloc(DEPTH)
     dealloc(COLOUR)
-    closeWindow()
+    destroyWindow()
 

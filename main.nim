@@ -1,6 +1,7 @@
+
 import renderer
-import raylib
-import raymath
+import cols
+import vectors
 import math
 
 const
@@ -60,7 +61,7 @@ proc fragShader0(f: frag): pixel =
         r : uint8 = int(rFloat*255.0).uint8
         g : uint8 = int(gFloat*255.0).uint8
         b : uint8 = int(bFloat*255.0).uint8
-    return pixel(col: r.uint32 shl 24 + g.uint32 shl 16 + b.uint32 shl 8 + 0xFF)
+    return pixel(col: 0xFF shl 24 + r.uint32 shl 16 + g.uint32 shl 8 + b.uint32)
 
 
 proc doButtons() =
@@ -68,26 +69,26 @@ proc doButtons() =
         result = Vector4(x: vec.x, y: 0, z: vec.z, w: vec.w)
         result.x /= sqrt(result.x*result.x + result.z*result.z)
         result.z /= sqrt(result.x*result.x + result.z*result.z)
-    if isKeyDown(W):
-        camera.pos += camera.forward.flattenY()/20
-    if isKeyDown(S):
-        camera.pos -= camera.forward.flattenY()/20
-    if isKeyDown(D):
-        camera.pos += camera.right.flattenY()/20
-    if isKeyDown(A):
-        camera.pos -= camera.right.flattenY()/20
-    if isKeyDown(Space):
-        camera.pos.y += 2/40
-    if isKeyDown(LeftControl):
-        camera.pos.y -= 2/40
-    if isKeyDown(Right):
-        camera.yaw += PI/60
-    if isKeyDown (Left):
-        camera.yaw -= PI/60
-    if isKeyDown(Up):
-        camera.pitch -= PI/60
-    if isKeyDown(Down):
-        camera.pitch += PI/60
+    if isKeyDown(Key_W):
+        camera.pos += camera.forward.flattenY()*7*frameTime
+    if isKeyDown(Key_S):
+        camera.pos -= camera.forward.flattenY()*7*frameTime
+    if isKeyDown(Key_D):
+        camera.pos += camera.right.flattenY()*7*frameTime
+    if isKeyDown(Key_A):
+        camera.pos -= camera.right.flattenY()*7*frameTime
+    if isKeyDown(KEY_SPACE):
+        camera.pos.y += 7*frameTime
+    if isKeyDown(KEY_LEFT_CONTROL):
+        camera.pos.y -= 7*frameTime
+    if isKeyDown(KEY_RIGHT):
+        camera.yaw += PI/3*3*frameTime
+    if isKeyDown(KEY_LEFT):
+        camera.yaw -= PI/3*3*frameTime
+    if isKeyDown(KEY_UP):
+        camera.pitch -= PI/3*3*frameTime
+    if isKeyDown(KEY_DOWN):
+        camera.pitch += PI/3*3*frameTime
     
     while camera.yaw > PI:
         camera.yaw -= 2*PI
@@ -102,7 +103,7 @@ proc doButtons() =
     camera.forward = Vector4(x: sin(camera.yaw)*cos(-camera.pitch), y: sin(-camera.pitch), z: cos(camera.yaw)*cos(-camera.pitch), w: 0)
     camera.up = crossProduct(camera.right.getXYZ(), camera.forward.getXYZ()).addW(0)
 
-proc setVertexColour(triangle: var tri, col: Color, vert: int, r: int, g: int, b: int)=
+proc setVertexColour(triangle: var tri, col: Colour, vert: int, r: int, g: int, b: int)=
     triangle.floatAttribs[vert][r] = col.r.float/255
     triangle.floatAttribs[vert][g] = col.g.float/255
     triangle.floatAttribs[vert][b] = col.b.float/255
@@ -111,7 +112,7 @@ proc application() =
 
     doButtons()
 
-    clearScreen(0x3c4c24ff)
+    clearScreen(0xff3c4c24'u32)
     
     var
         tri1 = tri(
