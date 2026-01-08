@@ -3,7 +3,6 @@ import libSRWWL
 export KeyboardKey, isKeyDown, isKeyUp, windowShouldClose
 import cols
 import vectors
-import math
 import algorithm
 import times
 
