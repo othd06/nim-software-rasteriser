@@ -43,7 +43,8 @@ type
         intAttribs*: array[3, array[maxAttribs, int32]]
         floatAttribs*: array[3, array[maxAttribs, float32]]
         screenLeft, screenRight, screenTop, screenBottom: uint32
-        denom, al1, al2, be1, be2: float
+        denom, al1, al2, be1, be2: float32
+        alpha0, dxAlpha, dyAlpha, beta0, dxBeta, dyBeta: float32
         v0, v1, v2: Vector2
     vert* = object
         position*: Vector4
@@ -113,7 +114,7 @@ var
     hHEIGHTf: float# = hHEIGHT.float
 
 
-proc rasterisationFragmentShading(line, lineMod: uint8) {.gcsafe.}
+proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.}
 
 proc doWorkA() {.gcsafe.} = rasterisationFragmentShading(0, 4)
 
@@ -479,7 +480,26 @@ proc preRasterisation()=
         newTri.be1 = (newTri.v2.y - newTri.v0.y)
         newTri.be2 = (newTri.v0.x - newTri.v2.x)
 
-proc rasterisationFragmentShading(line, lineMod: uint8) {.gcsafe.} =
+        # preRasterisation: compute derivatives in NDC per pixel
+        let dxNdc = 2.0'f32 / WIDTH.float
+        let dyNdc = 2.0'f32 / HEIGHT.float
+        
+        newTri.dxAlpha = newTri.al1 * dxNdc / newTri.denom
+        newTri.dyAlpha = newTri.al2 * dyNdc / newTri.denom
+        newTri.dxBeta  = newTri.be1 * dxNdc / newTri.denom
+        newTri.dyBeta  = newTri.be2 * dyNdc / newTri.denom
+        
+        # seed alpha0/beta0 at the exact NDC of (screenLeft, screenBottom)
+        let ndcPos0 = Vector2(
+          x: (newTri.screenLeft.float / hWIDTHf) - 1.0'f32,
+          y: (newTri.screenBottom.float / hHEIGHTf) - 1.0'f32
+        )
+        newTri.alpha0 = (newTri.al1 * (ndcPos0.x - newTri.v2.x) + newTri.al2 * (ndcPos0.y - newTri.v2.y)) / newTri.denom
+        newTri.beta0  = (newTri.be1 * (ndcPos0.x - newTri.v2.x) + newTri.be2 * (ndcPos0.y - newTri.v2.y)) / newTri.denom
+        
+                
+
+proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
     let
         colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
         depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
@@ -488,19 +508,35 @@ proc rasterisationFragmentShading(line, lineMod: uint8) {.gcsafe.} =
         var newTri = cast[ptr UncheckedArray[tri]](rasterisationFragmentShadingQueueMM[1])[][i]
         if newTri.denom == 0: continue
         {.push checks:off.}
+        var
+            alphaY = newTri.alpha0 - newTri.dyAlpha
+            betaY = newTri.beta0 - newTri.dyBeta
         for y in newTri.screenBottom..newTri.screenTop:
+            alphaY += newTri.dyAlpha
+            betaY += newTri.dyBeta
+
             if y mod lineMod != line: continue
+            
+            var
+                alpha = alphaY - newTri.dxAlpha
+                beta = betaY - newTri.dxBeta
+                gamma = 1 - alpha - beta
             for x in newTri.screenLeft..newTri.screenRight:
+                alpha += newTri.dxAlpha
+                beta += newTri.dxBeta
+                gamma = 1 - alpha - beta
+                
                 #compute NDC position
-                let ndcPos: Vector2 = Vector2(
-                    x: (x.float / hWIDTHf) - 1,
-                    y: (y.float / hHEIGHTf) - 1
-                )
+                #let ndcPos: Vector2 = Vector2(
+                #    x: (x.float / hWIDTHf) - 1,
+                #    y: (y.float / hHEIGHTf) - 1
+                #)
                 #compute barycentrics
-                let
-                    alpha: float32 = ( newTri.al1 * (ndcPos.x - newTri.v2.x) + newTri.al2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
-                    beta: float32 = ( newTri.be1 * (ndcPos.x - newTri.v2.x) + newTri.be2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
-                    gamma: float32 = 1 - alpha - beta
+                #let
+                #    alpha: float32 = ( newTri.al1 * (ndcPos.x - newTri.v2.x) + newTri.al2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
+                #    beta: float32 = ( newTri.be1 * (ndcPos.x - newTri.v2.x) + newTri.be2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
+                #    gamma: float32 = 1 - alpha - beta
+                
                 #reject fragments outside triangle
                 if alpha < 0.0 or beta < 0.0 or gamma < 0.0:
                     continue
