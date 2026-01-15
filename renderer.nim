@@ -34,6 +34,9 @@ type
         uintAttribs*: array[3, array[maxAttribs, uint32]]
         intAttribs*: array[3, array[maxAttribs, int32]]
         floatAttribs*: array[3, array[maxAttribs, float32]]
+        screenLeft, screenRight, screenTop, screenBottom: uint32
+        denom, al1, al2, be1, be2: float
+        v0, v1, v2: Vector2
     vert* = object
         position*: Vector4
         uintAttribs*: array[maxAttribs, uint32]
@@ -341,12 +344,8 @@ proc clipping() =
         if bottomClip(newTri): continue
         rasterisationFragmentShadingQueue.add(newTri)
 
-proc rasterisationFragmentShading() =
-    let
-        colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
-        depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
-    while rasterisationFragmentShadingQueue.len > 0:
-        var newTri = rasterisationFragmentShadingQueue.pop()
+proc preRasterisation()=
+    for newTri in mitems(rasterisationFragmentShadingQueue):
         for i in 0..2:
             newTri.positions[i].x /= newTri.positions[i].w
             newTri.positions[i].y /= newTri.positions[i].w
@@ -354,33 +353,39 @@ proc rasterisationFragmentShading() =
         let
             topRight = Vector2(x: max(newTri.positions[0].x, max(newTri.positions[1].x, newTri.positions[2].x)), y: max(newTri.positions[0].y, max(newTri.positions[1].y, newTri.positions[2].y)))
             bottomLeft = Vector2(x: min(newTri.positions[0].x, min(newTri.positions[1].x, newTri.positions[2].x)), y: min(newTri.positions[0].y, min(newTri.positions[1].y, newTri.positions[2].y)))
-            screenLeft: uint32 = max((bottomLeft.x*(hWIDTH).float).int32 + (hWIDTH).int32, 0).uint32
-            screenRight: uint32 = min((topRight.x*(hWIDTH).float).int32 + (hWIDTH).int32, WIDTH-1).uint32
-            screenTop: uint32 = min((topRight.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, HEIGHT-1).uint32
-            screenBottom: uint32 = max((bottomLeft.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, 0).uint32
+        newTri.screenLeft = max((bottomLeft.x*(hWIDTH).float).int32 + (hWIDTH).int32, 0).uint32
+        newTri.screenRight = min((topRight.x*(hWIDTH).float).int32 + (hWIDTH).int32, WIDTH-1).uint32
+        newTri.screenTop = min((topRight.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, HEIGHT-1).uint32
+        newTri.screenBottom = max((bottomLeft.y*(hHEIGHT).float).int32 + (hHEIGHT).int32, 0).uint32
         
-        let
-            v0 = Vector2(
-                x: newTri.positions[0].x,
-                y: newTri.positions[0].y
-            )
-            v1 = Vector2(
-                x: newTri.positions[1].x,
-                y: newTri.positions[1].y
-            )
-            v2 = Vector2(
-                x: newTri.positions[2].x,
-                y: newTri.positions[2].y
-            )
-            denom = ( (v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y) )
-            al1 = (v1.y - v2.y)
-            al2 = (v2.x - v1.x)
-            be1 = (v2.y - v0.y)
-            be2 = (v0.x - v2.x)
-        if denom == 0: continue
+        newTri.v0 = Vector2(
+            x: newTri.positions[0].x,
+            y: newTri.positions[0].y
+        )
+        newTri.v1 = Vector2(
+            x: newTri.positions[1].x,
+            y: newTri.positions[1].y
+        )
+        newTri.v2 = Vector2(
+            x: newTri.positions[2].x,
+            y: newTri.positions[2].y
+        )
+        newTri.denom = ( (newTri.v1.y - newTri.v2.y) * (newTri.v0.x - newTri.v2.x) + (newTri.v2.x - newTri.v1.x) * (newTri.v0.y - newTri.v2.y) )
+        newTri.al1 = (newTri.v1.y - newTri.v2.y)
+        newTri.al2 = (newTri.v2.x - newTri.v1.x)
+        newTri.be1 = (newTri.v2.y - newTri.v0.y)
+        newTri.be2 = (newTri.v0.x - newTri.v2.x)
+
+proc rasterisationFragmentShading() =
+    let
+        colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
+        depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
+    while rasterisationFragmentShadingQueue.len > 0:
+        var newTri = rasterisationFragmentShadingQueue.pop()
+        if newTri.denom == 0: continue
         {.push checks:off.}
-        for y in screenBottom..screenTop:
-            for x in screenLeft..screenRight:
+        for y in newTri.screenBottom..newTri.screenTop:
+            for x in newTri.screenLeft..newTri.screenRight:
                 #compute NDC position
                 let ndcPos: Vector2 = Vector2(
                     x: (x.float / hWIDTHf) - 1,
@@ -388,8 +393,8 @@ proc rasterisationFragmentShading() =
                 )
                 #compute barycentrics
                 let
-                    alpha: float32 = ( al1 * (ndcPos.x - v2.x) + al2 * (ndcPos.y - v2.y) ) / denom
-                    beta: float32 = ( be1 * (ndcPos.x - v2.x) + be2 * (ndcPos.y - v2.y) ) / denom
+                    alpha: float32 = ( newTri.al1 * (ndcPos.x - newTri.v2.x) + newTri.al2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
+                    beta: float32 = ( newTri.be1 * (ndcPos.x - newTri.v2.x) + newTri.be2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
                     gamma: float32 = 1 - alpha - beta
                 #reject fragments outside triangle
                 if alpha < 0.0 or beta < 0.0 or gamma < 0.0:
@@ -442,34 +447,6 @@ proc updateScreen() =
     currentCol = 1-currentCol
     COLOUR = COLOURS[currentCol]
     waitForFrame()
-    #[
-    let
-        colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
-        depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
-    ## Convert uint32 RGBA → Image → Texture2D
-    # Convert to seq[Colour] for Raylib
-    if isKeyDown(L):
-        for i in 0..<WIDTH * HEIGHT:
-            let px = depthBuffer[][i]
-            colourData[i] = Colour(
-                r: uint8(min((px / 100).float*255, 255.0)),
-                g: uint8(min((px / 100).float*255, 255.0)),
-                b: uint8(min((px / 100).float*255, 255.0)),
-                a: 255 # ignore provided alpha
-            )
-    else:
-        for i in 0 ..< WIDTH * HEIGHT:
-            let px = colourBuffer[][i]
-            colourData[i] = Colour(
-                r: uint8((px shr 24) and 0xFF),
-                g: uint8((px shr 16) and 0xFF),
-                b: uint8((px shr 8) and 0xFF),
-                a: 255 # ignore provided alpha
-            )
-    updateTexture(screenTex, colourData)
-    
-    drawTexture(screenTex, 0, 0, White)
-    ]#
 
 proc render*() =
     #beginDrawing()
@@ -482,6 +459,9 @@ proc render*() =
     clipping()
     let clippingTime = (epochTime()-startTime)*1000
     startTime = epochTime()
+    preRasterisation()
+    let preRasterisationTime = (epochTime()-startTime)*1000
+    startTime = epochTime()
     rasterisationFragmentShading()
     let rasterisationFragmentShadingTime = (epochTime()-startTime)*1000
     startTime = epochTime()
@@ -493,6 +473,7 @@ proc render*() =
     if isKeyDown(KEY_L):
         echo("Vertex Shading Time: ", $vertexShadingTime, " ms")
         echo("Clipping Time: ", $clippingTime, " ms")
+        echo("PreRasterisation Time: ", $preRasterisationTime, " ms")
         echo("RasterisationFragmentShading Time: ", $rasterisationFragmentShadingTime, " ms")
         echo("Blit Time: ", $blitTime, " ms")
 
