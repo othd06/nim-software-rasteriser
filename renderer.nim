@@ -5,9 +5,17 @@ import cols
 import vectors
 import algorithm
 import times
+import std/locks
+import std/typedthreads
 
 var frameTime*: float
 var frameStart: float
+var
+    lockA, lockB, lockC, lockD: Lock
+    condA, condB, condC, condD: Cond
+    jobReadyA, jobReadyB, jobReadyC, jobReadyD: bool
+    jobDoneA, jobDoneB, jobDoneC, jobDoneD: bool
+var tA, tB, tC, tD: Thread[pointer]
 
 func getXYZ*(vec: Vector4): Vector3 {.inline.} =
     return Vector3(x: vec.x, y: vec.y, z: vec.z)
@@ -64,6 +72,7 @@ var
     vertexShadingQueue: seq[tri]
     clippingQueue: seq[tri]
     rasterisationFragmentShadingQueue: seq[tri]
+    rasterisationFragmentShadingQueueMM: (int, pointer)
     colourData: seq[Colour] #= newSeq[Colour](WIDTH * HEIGHT)
     
 
@@ -73,12 +82,18 @@ var
 var
     vertexShaders: seq[vertexShader]
     fragmentShaders: seq[fragmentShader]
+    fragmentShadersMM: pointer
 
 proc registerVertexShader*(shader: vertexShader)=
     vertexShaders.add(shader)
 
 proc registerFragmentShader*(shader: fragmentShader)=
     fragmentShaders.add(shader)
+    
+    if fragmentShadersMM != nil: dealloc(fragmentShadersMM)
+    fragmentShadersMM = alloc(fragmentShaders.len() * sizeof(fragmentShader))
+    for i in 0..fragmentShaders.high:
+        cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[][i] = fragmentShaders[i]
 
 proc queueTri*(triangle: tri)=
     vertexShadingQueue.add(triangle)
@@ -97,6 +112,77 @@ var
     hWIDTHf: float# = hWIDTH.float
     hHEIGHTf: float# = hHEIGHT.float
 
+
+proc rasterisationFragmentShading(line, lineMod: uint8) {.gcsafe.}
+
+proc doWorkA() {.gcsafe.} = rasterisationFragmentShading(0, 4)
+
+proc doWorkB() {.gcsafe.} = rasterisationFragmentShading(1, 4)
+
+proc doWorkC() {.gcsafe.} = rasterisationFragmentShading(2, 4)
+
+proc doWorkD() {.gcsafe.} = rasterisationFragmentShading(3, 4)
+
+proc workerA(arg: pointer) {.thread.} =
+    while true:
+        lockA.acquire()
+        while not jobReadyA:
+            condA.wait(lockA)
+        jobReadyA = false
+        lockA.release()
+
+        doWorkA()
+
+        lockA.acquire()
+        jobDoneA = true
+        condA.signal()
+        lockA.release()
+
+proc workerB(arg: pointer) {.thread.} =
+    while true:
+        lockB.acquire()
+        while not jobReadyB:
+            condB.wait(lockB)
+        jobReadyB = false
+        lockB.release()
+
+        doWorkB()
+
+        lockB.acquire()
+        jobDoneB = true
+        condB.signal()
+        lockB.release()
+
+proc workerC(arg: pointer) {.thread.} =
+    while true:
+        lockC.acquire()
+        while not jobReadyC:
+            condC.wait(lockC)
+        jobReadyC = false
+        lockC.release()
+
+        doWorkC()
+
+        lockC.acquire()
+        jobDoneC = true
+        condC.signal()
+        lockC.release()
+
+proc workerD(arg: pointer) {.thread.} =
+    while true:
+        lockD.acquire()
+        while not jobReadyD:
+            condD.wait(lockD)
+        jobReadyD = false
+        lockD.release()
+
+        doWorkD()
+
+        lockD.acquire()
+        jobDoneD = true
+        condD.signal()
+        lockD.release()
+
 proc initRendering*(width: int32, height: int32) =
     WIDTH = width
     HEIGHT = height
@@ -106,6 +192,23 @@ proc initRendering*(width: int32, height: int32) =
     hWIDTHf = hWIDTH.float
     hHEIGHTf = hHEIGHT.float
     frameStart = epochTime()
+
+    initLock(lockA)
+    initLock(lockB)
+    initLock(lockC)
+    initLock(lockD)
+    initCond(condA)
+    initCond(condB)
+    initCond(condC)
+    initCond(condD)
+    createThread(tA, workerA, nil)
+    createThread(tB, workerB, nil)
+    createThread(tC, workerC, nil)
+    createThread(tD, workerD, nil)
+
+    fragmentShadersMM = alloc(fragmentShaders.len() * sizeof(fragmentShader))
+    for i in 0..fragmentShaders.high:
+        cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[][i] = fragmentShaders[i]
 
     #colourData = newSeq[Colour](WIDTH * HEIGHT)
     for i in 0..<(WIDTH*HEIGHT):
@@ -376,11 +479,13 @@ proc preRasterisation()=
         newTri.be1 = (newTri.v2.y - newTri.v0.y)
         newTri.be2 = (newTri.v0.x - newTri.v2.x)
 
-proc rasterisationFragmentShading(line, lineMod: uint8) =
+proc rasterisationFragmentShading(line, lineMod: uint8) {.gcsafe.} =
     let
         colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
         depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
-    for newTri in mitems(rasterisationFragmentShadingQueue):
+    #for newTri in mitems(rasterisationFragmentShadingQueue):
+    for i in 0..rasterisationFragmentShadingQueueMM[0]:
+        var newTri = cast[ptr UncheckedArray[tri]](rasterisationFragmentShadingQueueMM[1])[][i]
         if newTri.denom == 0: continue
         {.push checks:off.}
         for y in newTri.screenBottom..newTri.screenTop:
@@ -438,7 +543,7 @@ proc rasterisationFragmentShading(line, lineMod: uint8) =
                         intAttribs: intAttrs,
                         uintAttribs: uintAttrs
                     )
-                    newPix = fragmentShaders[newFrag.fragmentShader](newFrag)
+                    newPix = (cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[])[newFrag.fragmentShader](newFrag)
                 colourBuffer[][y.int*WIDTH + x.int] = newPix.col
         {.pop.}
 
@@ -462,10 +567,63 @@ proc render*() =
     preRasterisation()
     let preRasterisationTime = (epochTime()-startTime)*1000
     startTime = epochTime()
-    rasterisationFragmentShading(0, 4)
-    rasterisationFragmentShading(1, 4)
-    rasterisationFragmentShading(2, 4)
-    rasterisationFragmentShading(3, 4)
+    #rasterisationFragmentShading(0, 2)
+    #rasterisationFragmentShading(1, 2)
+
+    #create a manual memory rasterisationFragmentShadingQueue()
+    rasterisationFragmentShadingQueueMM[0] = rasterisationFragmentShadingQueue.high
+    rasterisationFragmentShadingQueueMM[1] = alloc(rasterisationFragmentShadingQueue.len() * sizeof(tri))
+    for i in 0..rasterisationFragmentShadingQueue.high:
+        cast[ptr UncheckedArray[tri]](rasterisationFragmentShadingQueueMM[1])[][i] = rasterisationFragmentShadingQueue[i]
+    # Wake workers
+    lockA.acquire()
+    jobDoneA = false
+    jobReadyA = true
+    condA.signal()
+    lockA.release()
+
+    lockB.acquire()
+    jobDoneB = false
+    jobReadyB = true
+    condB.signal()
+    lockB.release()
+
+    lockC.acquire()
+    jobDoneC = false
+    jobReadyC = true
+    condC.signal()
+    lockC.release()
+
+    lockD.acquire()
+    jobDoneD = false
+    jobReadyD = true
+    condD.signal()
+    lockD.release()
+
+    # Wait for all
+    lockA.acquire()
+    while not jobDoneA:
+        condA.wait(lockA)
+    lockA.release()
+
+    lockB.acquire()
+    while not jobDoneB:
+        condB.wait(lockB)
+    lockB.release()
+
+    lockC.acquire()
+    while not jobDoneC:
+        condC.wait(lockC)
+    lockC.release()
+
+    lockD.acquire()
+    while not jobDoneD:
+        condD.wait(lockD)
+    lockD.release()
+
+    #free manual memory rasterisationFragmentShadingQueue
+    dealloc(rasterisationFragmentShadingQueueMM[1])
+
     let rasterisationFragmentShadingTime = (epochTime()-startTime)*1000
     rasterisationFragmentShadingQueue = @[]
     startTime = epochTime()
@@ -483,6 +641,7 @@ proc render*() =
 
 
 proc deInit*() =
+    dealloc(fragmentShadersMM)
     dealloc(DEPTH)
     dealloc(COLOUR)
     destroyWindow()
