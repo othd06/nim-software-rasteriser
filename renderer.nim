@@ -210,7 +210,7 @@ proc initRendering*(width: int32, height: int32) =
     for i in 0..fragmentShaders.high:
         cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[][i] = fragmentShaders[i]
 
-    #colourData = newSeq[Colour](WIDTH * HEIGHT)
+    colourData = @[]
     for i in 0..<(WIDTH*HEIGHT):
         colourData.add(Colour(r: 0, g: 0, b: 0, a: 255))
     COLOURS[0] = alloc(WIDTH * HEIGHT * sizeof(uint32))
