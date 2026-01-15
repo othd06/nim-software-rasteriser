@@ -376,15 +376,15 @@ proc preRasterisation()=
         newTri.be1 = (newTri.v2.y - newTri.v0.y)
         newTri.be2 = (newTri.v0.x - newTri.v2.x)
 
-proc rasterisationFragmentShading() =
+proc rasterisationFragmentShading(line, lineMod: uint8) =
     let
         colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
         depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
-    while rasterisationFragmentShadingQueue.len > 0:
-        var newTri = rasterisationFragmentShadingQueue.pop()
+    for newTri in mitems(rasterisationFragmentShadingQueue):
         if newTri.denom == 0: continue
         {.push checks:off.}
         for y in newTri.screenBottom..newTri.screenTop:
+            if y mod lineMod != line: continue
             for x in newTri.screenLeft..newTri.screenRight:
                 #compute NDC position
                 let ndcPos: Vector2 = Vector2(
@@ -462,8 +462,12 @@ proc render*() =
     preRasterisation()
     let preRasterisationTime = (epochTime()-startTime)*1000
     startTime = epochTime()
-    rasterisationFragmentShading()
+    rasterisationFragmentShading(0, 4)
+    rasterisationFragmentShading(1, 4)
+    rasterisationFragmentShading(2, 4)
+    rasterisationFragmentShading(3, 4)
     let rasterisationFragmentShadingTime = (epochTime()-startTime)*1000
+    rasterisationFragmentShadingQueue = @[]
     startTime = epochTime()
     updateScreen()
     let blitTime = (epochTime()-startTime)*1000
