@@ -526,17 +526,6 @@ proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
                 beta += newTri.dxBeta
                 gamma = 1 - alpha - beta
                 
-                #compute NDC position
-                #let ndcPos: Vector2 = Vector2(
-                #    x: (x.float / hWIDTHf) - 1,
-                #    y: (y.float / hHEIGHTf) - 1
-                #)
-                #compute barycentrics
-                #let
-                #    alpha: float32 = ( newTri.al1 * (ndcPos.x - newTri.v2.x) + newTri.al2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
-                #    beta: float32 = ( newTri.be1 * (ndcPos.x - newTri.v2.x) + newTri.be2 * (ndcPos.y - newTri.v2.y) ) / newTri.denom
-                #    gamma: float32 = 1 - alpha - beta
-                
                 #reject fragments outside triangle
                 if alpha < 0.0 or beta < 0.0 or gamma < 0.0:
                     continue
