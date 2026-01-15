@@ -643,6 +643,7 @@ proc render*() =
 proc deInit*() =
     dealloc(fragmentShadersMM)
     dealloc(DEPTH)
-    dealloc(COLOUR)
+    dealloc(COLOURS[0])
+    dealloc(COLOURS[1])
     destroyWindow()
 
