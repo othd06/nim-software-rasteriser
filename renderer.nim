@@ -667,7 +667,7 @@ proc render*() =
         echo("PreRasterisation Time: ", $preRasterisationTime, " ms")
         echo("RasterisationFragmentShading Time: ", $rasterisationFragmentShadingTime, " ms")
         echo("Blit Time: ", $blitTime, " ms")
-    if frameDropped(): echo "Frame Dropped"
+    if logging and frameDropped(): echo "Frame Dropped"
 
 
 proc deInit*() =
