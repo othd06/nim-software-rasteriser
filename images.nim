@@ -29,9 +29,9 @@ proc sampleQOI*(sampleType: SampleType, img: Image, u, v: float32): Colour {.gcs
         of BILINEAR:
             let
                 tl = imgData[uint32(y) * img.width + uint32(x)]
-                tr = imgData[uint32(y) * img.width + uint32(x+1.0)]
+                tr = imgData[uint32(y) * img.width + uint32(x+0.9999)]
                 bl = imgData[uint32(y+0.9999) * img.width + uint32(x)]
-                br = imgData[uint32(y+0.9999) * img.width + uint32(x + 1.0)]
+                br = imgData[uint32(y+0.9999) * img.width + uint32(x + 0.9999)]
                 xmod = x - float(int(x))
                 ymod = y - float(int(y))
                 t = Colour(r: uint8(tl.r.float32*(1-xmod) + tr.r.float32*xmod), g: uint8(tl.g.float32*(1-xmod) + tr.g.float32*xmod), b: uint8(tl.b.float32*(1-xmod) + tr.b.float32*xmod), a: uint8(tl.a.float32*(1-xmod) + tr.a.float32*xmod))
