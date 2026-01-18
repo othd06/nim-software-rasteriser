@@ -1,7 +1,6 @@
 
 import libSRWWL
 export KeyboardKey, isKeyDown, isKeyUp, windowShouldClose
-import cols
 import vectors
 import algorithm
 import times
@@ -66,22 +65,18 @@ type
     fragmentShader = proc(f: frag): pixel {.nimcall, gcsafe.}
 
 var
-    COLOUR: pointer#array[WIDTH*HEIGHT, uint32]
+    COLOUR: pointer
     COLOURS: array[2, pointer]
     currentCol: int = 0
-    DEPTH: pointer#array[WIDTH*HEIGHT, float32]
+    DEPTH: pointer
     WIDTH: int32
     HEIGHT: int32
     vertexShadingQueue: seq[tri]
     clippingQueue: seq[tri]
     rasterisationFragmentShadingQueue: seq[tri]
     rasterisationFragmentShadingQueueMM: (int, pointer)
-    colourData: seq[Colour] #= newSeq[Colour](WIDTH * HEIGHT)
-    
 
-#const
-#    vertexShaders: array[1, vertexShader] = [vertexShader0]
-#    fragmentShaders: array[1, fragmentShader] = [fragShader0]
+
 var
     vertexShaders: seq[vertexShader]
     fragmentShaders: seq[fragmentShader]
@@ -101,13 +96,22 @@ proc registerFragmentShader*(shader: fragmentShader)=
 proc queueTri*(triangle: tri)=
     vertexShadingQueue.add(triangle)
 
-proc clearScreen*(colour: uint32)=
-    let
-        colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
-        depthBuffer = cast[ptr UncheckedArray[float32]](DEPTH)
-    for i in 0..(WIDTH*HEIGHT-1):
-        colourBuffer[][i] = colour
-        depthBuffer[i] = 1.0
+proc clearScreen*(colour: uint32) =
+    let colourBuffer = cast[ptr UncheckedArray[uint32]](COLOUR)
+    let depthBuffer  = cast[ptr UncheckedArray[float32]](DEPTH)
+  
+    # Fill the first line
+    for x in 0..<WIDTH:
+        colourBuffer[x] = colour
+        depthBuffer[x] = 1.0'f32
+  
+    # Copy that line into the rest
+    for y in 1..<HEIGHT:
+        let dstColour = addr colourBuffer[y * WIDTH]
+        let dstDepth  = addr depthBuffer[y * WIDTH]
+        copyMem(dstColour, addr colourBuffer[0], WIDTH * sizeof(uint32))
+        copyMem(dstDepth,  addr depthBuffer[0],  WIDTH * sizeof(float32))
+
 
 var
     hWIDTH: int32# = WIDTH shr 1
@@ -213,9 +217,6 @@ proc initRendering*(width: int32, height: int32) =
     for i in 0..fragmentShaders.high:
         cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[][i] = fragmentShaders[i]
 
-    colourData = @[]
-    for i in 0..<(WIDTH*HEIGHT):
-        colourData.add(Colour(r: 0, g: 0, b: 0, a: 255))
     COLOURS[0] = alloc(WIDTH * HEIGHT * sizeof(uint32))
     COLOURS[1] = alloc(WIDTH * HEIGHT * sizeof(uint32))
     COLOUR = COLOURS[currentCol]
