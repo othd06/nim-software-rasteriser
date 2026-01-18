@@ -536,10 +536,14 @@ proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
                 if alpha < 0.0 or beta < 0.0 or gamma < 0.0:
                     continue
                 #compute weights
-                let
-                    w0 = alpha
-                    w1 = beta
-                    w2 = gamma
+                var
+                    w0 = alpha/newTri.positions[0].w
+                    w1 = beta/newTri.positions[1].w
+                    w2 = gamma/newTri.positions[2].w
+                    sum = w0+w1+w2
+                w0 /= sum
+                w1 /= sum
+                w2 /= sum
                 #calculate depth
                 let
                     depth = w0*newTri.positions[0].z + w1*newTri.positions[1].z + w2*newTri.positions[2].z
@@ -684,4 +688,3 @@ proc deInit*() =
     dealloc(COLOURS[0])
     dealloc(COLOURS[1])
     destroyWindow()
-

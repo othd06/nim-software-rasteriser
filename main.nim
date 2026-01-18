@@ -1,6 +1,7 @@
 
 import renderer
 import cols
+import images
 import vectors
 import math
 
@@ -29,6 +30,9 @@ var
         pitch: 0,
         yaw: 0
     )
+
+let
+    texture = decodeQOI("awesomeface.qoi")
 
 proc vertexShader0(v: vert): vert =
     var outV = v
@@ -63,6 +67,13 @@ proc fragShader0(f: frag): pixel =
         b : uint8 = int(bFloat*255.0).uint8
     return pixel(col: 0xFF shl 24 + r.uint32 shl 16 + g.uint32 shl 8 + b.uint32)
 
+proc fragShader1(f: frag): pixel {.gcsafe.} =
+    let
+        u = f.floatAttribs[0]
+        v = f.floatAttribs[1]
+        col = sampleQOI(NEAREST, texture, u, v)
+    if col.a == 0: return pixel(col: 0xFFFFFFFF'u32)
+    return pixel(col: 0xFF shl 24 + col.r.uint32 shl 16 + col.g.uint32 shl 8 + col.b.uint32)
 
 proc doButtons() =
     func flattenY(vec: Vector4): Vector4=
@@ -108,6 +119,10 @@ proc setVertexColour(triangle: var tri, col: Colour, vert: int, r: int, g: int, 
     triangle.floatAttribs[vert][g] = col.g.float/255
     triangle.floatAttribs[vert][b] = col.b.float/255
 
+proc setUV(triangle: var tri, uv: (float32, float32), vert: int, u: int, v: int)=
+    triangle.floatAttribs[vert][u] = uv[0]
+    triangle.floatAttribs[vert][v] = uv[1]
+
 proc application() =
 
     doButtons()
@@ -117,12 +132,12 @@ proc application() =
     var
         tri1 = tri(
             vertexShader: 0,
-            fragmentShader: 0,
+            fragmentShader: 1,
             positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)]
         )
         tri2 = tri(
             vertexShader: 0,
-            fragmentShader: 0,
+            fragmentShader: 1,
             positions: [Vector4(x: -1, y: 1, z: 9, w: 1), Vector4(x: 1, y: 1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1)]
         )
         tri3 = tri(
@@ -175,12 +190,19 @@ proc application() =
             fragmentShader: 0,
             positions: [Vector4(x: -1, y: -1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 9, w: 1), Vector4(x: 1, y: -1, z: 11, w: 1)]
         )
-    tri1.setVertexColour(Green, 0, 0, 1, 2)
-    tri1.setVertexColour(Green, 1, 0, 1, 2)
-    tri1.setVertexcolour(Green, 2, 0, 1, 2)
-    tri2.setVertexColour(Green, 0, 0, 1, 2)
-    tri2.setVertexColour(Green, 1, 0, 1, 2)
-    tri2.setVertexcolour(Green, 2, 0, 1, 2)
+    tri1.setUV((0'f32, 0'f32), 0, 0, 1)
+    tri1.setUV((0'f32, 1'f32), 1, 0, 1)
+    tri1.setUV((1'f32, 0'f32), 2, 0, 1)
+    tri2.setUV((0'f32, 1'f32), 0, 0, 1)
+    tri2.setUV((1'f32, 1'f32), 1, 0, 1)
+    tri2.setUV((1'f32, 0'f32), 2, 0, 1)
+
+    #tri1.setVertexColour(Green, 0, 0, 1, 2)
+    #tri1.setVertexColour(Green, 1, 0, 1, 2)
+    #tri1.setVertexcolour(Green, 2, 0, 1, 2)
+    #tri2.setVertexColour(Green, 0, 0, 1, 2)
+    #tri2.setVertexColour(Green, 1, 0, 1, 2)
+    #tri2.setVertexcolour(Green, 2, 0, 1, 2)
     tri3.setVertexColour(Blue, 0, 0, 1, 2)
     tri3.setVertexColour(Blue, 1, 0, 1, 2)
     tri3.setVertexcolour(Blue, 2, 0, 1, 2)
@@ -229,6 +251,7 @@ proc application() =
 
 registerVertexShader(vertexShader0)
 registerFragmentShader(fragShader0)
+registerFragmentShader(fragShader1)
 initRendering(WIDTH, HEIGHT)
 enableLogging()
 echo "initialised"
@@ -237,5 +260,6 @@ while not windowShouldClose():
     render()
 
 deInit()
+freeImg(texture)
 
 
