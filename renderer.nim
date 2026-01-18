@@ -17,6 +17,7 @@ var
     jobDoneA, jobDoneB, jobDoneC, jobDoneD: bool
 var tA, tB, tC, tD: Thread[pointer]
 var logging: bool = false
+var backfaceCulling: bool = true
 
 func getXYZ*(vec: Vector4): Vector3 {.inline.} =
     return Vector3(x: vec.x, y: vec.y, z: vec.z)
@@ -498,7 +499,8 @@ proc preRasterisation()=
         newTri.alpha0 = (newTri.al1 * (ndcPos0.x - newTri.v2.x) + newTri.al2 * (ndcPos0.y - newTri.v2.y)) / newTri.denom
         newTri.beta0  = (newTri.be1 * (ndcPos0.x - newTri.v2.x) + newTri.be2 * (ndcPos0.y - newTri.v2.y)) / newTri.denom
         
-                
+proc backFace(triangle: tri): bool =
+    return (triangle.v0.x-triangle.v2.x)*(triangle.v1.y-triangle.v0.y)<=(triangle.v0.x-triangle.v1.x)*(triangle.v2.y-triangle.v0.y)
 
 proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
     let
@@ -507,6 +509,8 @@ proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
     #for newTri in mitems(rasterisationFragmentShadingQueue):
     for i in 0..rasterisationFragmentShadingQueueMM[0]:
         var newTri = cast[ptr UncheckedArray[tri]](rasterisationFragmentShadingQueueMM[1])[][i]
+        let triFragmentShader = (cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[])[newTri.fragmentShader]
+        if backfaceCulling and newTri.backFace(): continue
         if newTri.denom == 0: continue
         {.push checks:off.}
         var
@@ -569,7 +573,7 @@ proc rasterisationFragmentShading(line, lineMod: uint8) {.inline, gcsafe.} =
                         intAttribs: intAttrs,
                         uintAttribs: uintAttrs
                     )
-                    newPix = (cast[ptr UncheckedArray[fragmentShader]](fragmentShadersMM)[])[newFrag.fragmentShader](newFrag)
+                    newPix = triFragmentShader(newFrag)
                 colourBuffer[][y.int*WIDTH + x.int] = newPix.col
         {.pop.}
 
@@ -580,6 +584,8 @@ proc updateScreen() =
     waitForFrame()
 
 proc enableLogging*()= logging = true
+
+proc setBackfaceCulling*(v: bool)= backfaceCulling=v
 
 proc render*() =
     #beginDrawing()
