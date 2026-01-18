@@ -230,6 +230,7 @@ proc application() =
 registerVertexShader(vertexShader0)
 registerFragmentShader(fragShader0)
 initRendering(WIDTH, HEIGHT)
+enableLogging()
 echo "initialised"
 while not windowShouldClose():
     application()

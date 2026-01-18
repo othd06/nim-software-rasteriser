@@ -16,6 +16,7 @@ var
     jobReadyA, jobReadyB, jobReadyC, jobReadyD: bool
     jobDoneA, jobDoneB, jobDoneC, jobDoneD: bool
 var tA, tB, tC, tD: Thread[pointer]
+var logging: bool = false
 
 func getXYZ*(vec: Vector4): Vector3 {.inline.} =
     return Vector3(x: vec.x, y: vec.y, z: vec.z)
@@ -578,6 +579,8 @@ proc updateScreen() =
     COLOUR = COLOURS[currentCol]
     waitForFrame()
 
+proc enableLogging*()= logging = true
+
 proc render*() =
     #beginDrawing()
     #clearBackground(RayWhite)
@@ -657,12 +660,14 @@ proc render*() =
     #endDrawing()
     frameTime = epochTime() - frameStart
     frameStart = epochTime()
-    if isKeyDown(KEY_L):
+    #while not frameDropped(): waitForFrame()
+    if isKeyDown(KEY_L) and logging:
         echo("Vertex Shading Time: ", $vertexShadingTime, " ms")
         echo("Clipping Time: ", $clippingTime, " ms")
         echo("PreRasterisation Time: ", $preRasterisationTime, " ms")
         echo("RasterisationFragmentShading Time: ", $rasterisationFragmentShadingTime, " ms")
         echo("Blit Time: ", $blitTime, " ms")
+    if frameDropped(): echo "Frame Dropped"
 
 
 proc deInit*() =

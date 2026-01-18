@@ -89,6 +89,8 @@ when defined(windows):
     const
         KEY_RIGHT_SHIFT* = KEY_LEFT_SHIFT
         KEY_RIGHT_CONTROL* = KEY_LEFT_CONTROL
+    
+    proc frameDropped*(): bool = false #libSRWinWL does not have API support for this yet
 elif defined(linux):
     # Tell Nim to link against your static library and Wayland
     {.passL: "-Llib -lSRWWL -lwayland-client".}
@@ -174,6 +176,8 @@ elif defined(linux):
             KEY_RIGHT_SHIFT     = 54       # Key: Shift right
             KEY_RIGHT_CONTROL   = 97       # Key: Control right
             KEY_RIGHT_ALT       = 100      # Key: Alt right
+    
+    proc frameDropped*(): bool {.importc.}
 else:
     {.error: "Unsupported platform".}
 
@@ -182,7 +186,7 @@ proc createWindow*(w: cint, h: cint, title: cstring) {.importc.}
 proc destroyWindow*() {.importc.}
 
 proc setBuffer*(buf: ptr uint8) {.importc.}
-proc setImageResizeCallback*(cb: proc() {.cdecl.}) {.importc.}
+proc setImageResizeCallback*(cb: proc(w, h: uint32) {.cdecl.}) {.importc.}
 
 proc isKeyDown*(key: KeyboardKey): bool {.importc.}
 proc isKeyUp*(key: KeyboardKey): bool {.importc.}
