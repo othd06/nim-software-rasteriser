@@ -112,6 +112,74 @@ proc clearScreen*(colour: uint32) =
         copyMem(dstColour, addr colourBuffer[0], WIDTH * sizeof(uint32))
         copyMem(dstDepth,  addr depthBuffer[0],  WIDTH * sizeof(float32))
 
+proc getScreenshot*(): seq[uint8]=
+    let screenImage = cast[ptr UncheckedArray[uint32]](COLOURS[currentCol])
+    var
+        output: seq[uint8] = @['q'.uint8, 'o'.uint8, 'i'.uint8, 'f'.uint8]
+        index = 0
+        lastCol: uint32 = 0xFF000000'u32
+        seen: array[64, uint32]
+
+    for i in 0..<4:
+        output.add(uint8((WIDTH shr (8*(3-i))) and 0x000000FF))
+    for i in 0..<4:
+        output.add(uint8((HEIGHT shr (8*(3-i))) and 0x000000FF))
+    output.add(4)
+    output.add(1)
+
+    func hash(col: uint32): uint8=
+        return uint8(((col and 0x00FF0000) shr 16)*3 + ((col and 0x0000FF00) shr 8)*5 + (col and 0x000000FF)*7 + ((col and 0xFF000000'u32) shr 24)*11) mod 64
+
+    while index < WIDTH * HEIGHT:
+        if screenImage[index] == lastCol:
+            var numSeen: int = -1
+            while index < WIDTH * HEIGHT and screenImage[index] == lastCol and numSeen < 61:
+                numSeen += 1
+                index += 1
+            output.add(0b11000000'u8 or (numSeen.uint8 and 0b00111111'u8))
+        elif seen[hash(screenImage[index])] == screenImage[index]:
+            lastCol = screenImage[index]
+            output.add(hash(screenImage[index]))
+            index += 1
+        else:
+            let
+                newCol = screenImage[index]
+                dr: uint8 = (((newCol and 0x00FF0000) shr 16).uint8 - ((lastCol and 0x00FF0000) shr 16).uint8)
+                dg: uint8 = (((newCol and 0x0000FF00) shr 8 ).uint8 - ((lastCol and 0x0000FF00) shr 8 ).uint8)
+                db: uint8 = (((newCol and 0x000000FF) shr 0 ).uint8 - ((lastCol and 0x000000FF) shr 0 ).uint8)
+            if (newCol and 0xFF000000'u32) != (lastCol and 0xFF000000'u32):
+                output.add(0xFF'u8)
+                output.add(uint8((newCol and 0x00FF0000) shr 16))
+                output.add(uint8((newCol and 0x0000FF00) shr 8))
+                output.add(uint8(newCol and 0x000000FF))
+                output.add(uint8((newCol and 0xFF000000'u32) shr 24))
+                seen[hash(newCol)] = newCol
+                lastCol = newCol
+                index += 1
+            elif cast[int8](dr) >= -2 and cast[int8](dr) <= 1 and cast[int8](dg) >= -2 and cast[int8](dg) <= 1 and cast[int8](db) >= -2 and cast[int8](db) <= 1:
+                output.add(0b01000000'u8 or uint8((dr + 2) shl 4) or uint8((dg + 2) shl 2) or uint8(db + 2))
+                seen[hash(newCol)] = newCol
+                lastCol = newCol
+                index += 1
+            elif cast[int8](dg) >= -32 and cast[int8](dg) <= 31 and cast[int8](dr-dg) >= -8 and cast[int8](dr-dg) <= 7 and cast[int8](db-dg) >= -8 and cast[int8](db-dg) <= 7:
+                output.add(0b10000000'u8 or uint8(dg.uint8+32))
+                output.add(uint8((dr.uint8-dg.uint8+8) shl 4) or uint8(db.uint8-dg.uint8+8))
+                seen[hash(newCol)] = newCol
+                lastCol = newCol
+                index += 1
+            else:
+                output.add(0xFE'u8)
+                output.add(uint8((newCol and 0x00FF0000) shr 16))
+                output.add(uint8((newCol and 0x0000FF00) shr 8))
+                output.add(uint8(newCol and 0x000000FF))
+                seen[hash(newCol)] = newCol
+                lastCol = newCol
+                index += 1
+    for i in 0..<7:
+        output.add(0)
+    output.add(1)
+
+    return output
 
 var
     hWIDTH: int32# = WIDTH shr 1

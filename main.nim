@@ -1,4 +1,6 @@
 
+import os, strutils
+
 import renderer
 import cols
 import images
@@ -249,15 +251,43 @@ proc application() =
     queueTri(tri12)
 
 
+proc nextScreenshotFilename(dir: string): string =
+    func isDigit(str: string): bool=
+        for i in str:
+            if not isDigit(i): return false
+        return true
+    var maxNum = -1
+    for kind, path in walkDir(dir):
+        if kind == pcFile and path.endsWith(".qoi"):
+            let base = splitFile(path).name
+            if base.startsWith("screenshot"):
+                let numStr = base["screenshot".len .. ^1]
+                if numStr.len > 0 and numStr.isDigit():
+                    let n = parseInt(numStr)
+                    if n > maxNum: maxNum = n
+    let nextNum = maxNum + 1
+    return dir / ("screenshot" & $nextNum & ".qoi")
+
+
 registerVertexShader(vertexShader0)
 registerFragmentShader(fragShader0)
 registerFragmentShader(fragShader1)
 initRendering(WIDTH, HEIGHT)
 enableLogging()
 echo "initialised"
+var screenShotted: bool = false
 while not windowShouldClose():
     application()
     render()
+    if isKeyDown(KEY_P):
+        if not screenShotted:
+            echo "screenshot"
+            screenShotted = true
+            let
+                name = nextScreenshotFilename("screenshots")
+                data = getScreenshot()
+            writeFile(name, data)
+    else: screenShotted = false
 
 deInit()
 freeImg(texture)
